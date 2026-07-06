@@ -3,125 +3,116 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- Creazione della Finestra Principale
 local Window = Rayfield:CreateWindow({
-    Name = "Golf Combat & Utilities Hub",
-    LoadingTitle = "Caricamento Interfaccia...",
-    LoadingSubtitle = "by Gemini",
-    ConfigurationSaving = {
-        Enabled = false,
-        FolderName = nil,
-        FileName = "CombatConfig"
-    },
-    Discord = {
-        Enabled = false,
-        Invite = "",
-        RememberJoins = false
-    },
+    Name = "Dalakar-Cheat",
+    LoadingTitle = "Inizializzazione Moduli...",
+    LoadingSubtitle = "by Dalakar",
+    ConfigurationSaving = { Enabled = false },
     KeySystem = false
 })
 
--- VARIABILI DI STATO
+-- VARIABILI DI STATO GLOBAL
 local State = {
     Aimbot = false,
-    FOV = 150, -- Aumentato il FOV di base per facilitare i test iniziale
-    AntiBan = true,
-    AimbotMobile = false,
-    Whitelist = {"player1", "player2"} 
+    FOV = 120,
+    EspGiocatori = false,
+    EspColore = Color3.fromRGB(255, 0, 0),
+    Whitelist = {"player1", "player2"}
 }
 
--- FUNZIONE DI SERVIZIO: Rilevamento Mobile
-local function isMobile()
-    return game:GetService("UserInputService"):GetKeyboardInputEnabled() == false
-end
+-- CREAZIONE DELLE SCHEDE (TAB)
+local CombatTab = Window:CreateTab("⚔️ Combattimento", 4483362458)
+local VisualsTab = Window:CreateTab("👁️ Visivi (ESP)", 4483362458)
 
--- CREAZIONE DELLE TAB
-local CombatTab = Window:CreateTab("⚔️ Combat", 4483362458)
-local SettingsTab = Window:CreateTab("⚙️ Impostazioni", 4483362458)
-
-CombatTab:CreateSection("Aimbot Centrale")
+-- ==========================================
+-- SEZIONE COMBATTIMENTO (AIMBOT SPECIFICO)
+-- ==========================================
+CombatTab:CreateSection("Mirino Automatico")
 
 CombatTab:CreateToggle({
-    Name = "Attiva Aimbot Generale",
+    Name = "Attiva Aimbot Motorio",
     CurrentValue = State.Aimbot,
-    Flag = "ToggleAimbot",
+    Flag = "AimbotToggle",
     Callback = function(Value)
         State.Aimbot = Value
     end,
 })
 
-CombatTab:CreateToggle({
-    Name = "Consenti su Mobile",
-    CurrentValue = State.AimbotMobile,
-    Flag = "ToggleMobile",
-    Callback = function(Value)
-        State.AimbotMobile = Value
-    end,
-})
-
 CombatTab:CreateSlider({
-    Name = "Raggio del FOV",
-    Min = 10,
-    Max = 500,
+    Name = "Raggio di Aggancio (FOV)",
+    Min = 50,
+    Max = 400,
     CurrentValue = State.FOV,
-    Increment = 5,
+    Increment = 10,
     ValueName = "Pixel",
     Callback = function(Value)
         State.FOV = Value
     end,
 })
 
-SettingsTab:CreateSection("Sicurezza & Whitelist")
+-- ==========================================
+-- SEZIONE VISIVI (ESP / WALLHACK)
+-- ==========================================
+VisualsTab:CreateSection("Wallhack Giocatori")
 
-SettingsTab:CreateToggle({
-    Name = "Simulazione Antiban",
-    CurrentValue = State.AntiBan,
-    Flag = "ToggleAntiban",
+VisualsTab:CreateToggle({
+    Name = "ESP Linee e Riquadri (Highlight)",
+    CurrentValue = State.EspGiocatori,
+    Flag = "EspToggle",
     Callback = function(Value)
-        State.AntiBan = Value
+        State.EspGiocatori = Value
     end,
 })
 
-SettingsTab:CreateInput({
-    Name = "Aggiungi alla Whitelist",
-    PlaceholderText = "Nome Giocatore",
-    RemoveTextAfterFocusLost = true,
-    Callback = function(Text)
-        if Text and Text ~= "" then
-            table.insert(State.Whitelist, Text:lower())
-            Rayfield:Notify({
-                Title = "Whitelist Aggiornata",
-                Content = Text .. " aggiunto alla lista alleati.",
-                Duration = 3,
-                Image = 4483362458,
-            })
-        end
-    end,
-})
-
--- LOGICA REVISIONATA E FORZATA
+-- LOGICA INTERNA SPECIFICA
 local Camera = workspace.CurrentCamera
 local LocalPlayer = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
 
-local function getClosestPlayer()
+-- 1. FUNZIONE ESP (Crea l'effetto attraverso i muri usando gli Highlight)
+local function GestisciESP()
+    for _, p in pairs(game.Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            local char = p.Character
+            local giaPresente = char:FindFirstChild("EH_ESP")
+            
+            if State.EspGiocatori then
+                if not giaPresente and char:FindFirstChild("HumanoidRootPart") then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Name = "EH_ESP"
+                    highlight.FillColor = State.EspColore
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    highlight.OutlineTransparency = 0
+                    highlight.Adornee = char
+                    highlight.Parent = char
+                end
+            else
+                if giaPresente then
+                    giaPresente:Destroy()
+                end
+            end
+        end
+    end
+end
+
+-- 2. FUNZIONE SEARCH AIMBOT (Trova il bersaglio più vicino al mirino effettivo)
+local function getClosestTarget()
     local target = nil
     local closestDistance = math.huge
+    local mousePos = UserInputService:GetMouseLocation()
 
     for _, v in pairs(game.Players:GetPlayers()) do
         if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
-            -- Controllo che il pezzo da mirare esista (usiamo Head per l'aimbot o HumanoidRootPart)
-            local targetPart = v.Character:FindFirstChild("Head") or v.Character:FindFirstChild("HumanoidRootPart")
-            
-            if targetPart and not table.find(State.Whitelist, v.Name:lower()) then
-                -- Calcola posizione sullo schermo
-                local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                
-                if onScreen then
-                    local mousePos = game:GetService("UserInputService"):GetMouseLocation()
-                    local distance2D = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    
-                    -- Se è dentro il cerchio del FOV ed è il più vicino
-                    if distance2D < State.FOV and distance2D < closestDistance then
-                        closestDistance = distance2D
-                        target = targetPart
+            if not table.find(State.Whitelist, v.Name:lower()) then
+                local part = v.Character:FindFirstChild("Head") or v.Character:FindFirstChild("HumanoidRootPart")
+                if part then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local distance2D = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                        if distance2D < State.FOV and distance2D < closestDistance then
+                            closestDistance = distance2D
+                            target = part
+                        end
                     end
                 end
             end
@@ -130,22 +121,31 @@ local function getClosestPlayer()
     return target
 end
 
--- LOOP DI COERCITIZIONE DELLA TELECAMERA (RenderStepped forza lo spostamento prima del disegno del frame)
+-- 3. LOOP UNIFICATO AD ALTA REATTIVITÀ (RenderStepped)
 game:GetService("RunService").RenderStepped:Connect(function()
+    -- Gestione Ciclica ESP
+    GestisciESP()
+
+    -- Gestione Ciclica Aimbot con sblocco angolare
     if State.Aimbot then
-        if not isMobile() or (isMobile() and State.AimbotMobile) then
-            local targetPart = getClosestPlayer()
-            if targetPart then
-                -- METODO FORZATO: Modifica l'asse di rotazione mantenendo la posizione attuale della camera
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
-            end
+        local targetPart = getClosestTarget()
+        if targetPart then
+            -- Calcola il Delta di rotazione necessario invece di forzare il CFrame fisso
+            local targetLook = CFrame.new(Camera.CFrame.Position, targetPart.Position)
+            -- Muove la telecamera tramite interpolazione matematica fluida per scavalcare l'anticheat
+            Camera.CFrame = Camera.CFrame:Lerp(targetLook, 0.25) 
         end
     end
 end)
 
+-- Pulizia degli ESP se si cambia server o si chiude lo script
+LocalPlayer.CharacterRemoving:Connect(function()
+    task.wait(1)
+    GestisciESP()
+end)
+
 Rayfield:Notify({
-    Title = "Script Caricato V2",
-    Content = "Puntamenti forzati pronti alla massima precisione.",
-    Duration = 5,
-    Image = 4483362458,
+    Title = "Emergency Module Pronto",
+    Content = "Dalakar",
+    Duration = 5
 })
