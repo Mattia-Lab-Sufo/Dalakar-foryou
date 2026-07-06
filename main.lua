@@ -22,10 +22,10 @@ local Window = Rayfield:CreateWindow({
 -- VARIABILI DI STATO
 local State = {
     Aimbot = false,
-    FOV = 100,
+    FOV = 150, -- Aumentato il FOV di base per facilitare i test iniziale
     AntiBan = true,
     AimbotMobile = false,
-    Whitelist = {"player1", "player2"} -- Nomi inseriti in minuscolo per controlli precisi
+    Whitelist = {"player1", "player2"} 
 }
 
 -- FUNZIONE DI SERVIZIO: Rilevamento Mobile
@@ -33,11 +33,10 @@ local function isMobile()
     return game:GetService("UserInputService"):GetKeyboardInputEnabled() == false
 end
 
--- CREAZIONE DELLE TAB (SCHEDE)
+-- CREAZIONE DELLE TAB
 local CombatTab = Window:CreateTab("⚔️ Combat", 4483362458)
 local SettingsTab = Window:CreateTab("⚙️ Impostazioni", 4483362458)
 
--- ELEMENTI NELLA SCHEDA COMBAT
 CombatTab:CreateSection("Aimbot Centrale")
 
 CombatTab:CreateToggle({
@@ -61,16 +60,15 @@ CombatTab:CreateToggle({
 CombatTab:CreateSlider({
     Name = "Raggio del FOV",
     Min = 10,
-    Max = 300,
+    Max = 500,
     CurrentValue = State.FOV,
     Increment = 5,
-    ValueName = "Gradi/Distanza",
+    ValueName = "Pixel",
     Callback = function(Value)
         State.FOV = Value
     end,
 })
 
--- ELEMENTI NELLA SCHEDA IMPOSTAZIONI
 SettingsTab:CreateSection("Sicurezza & Whitelist")
 
 SettingsTab:CreateToggle({
@@ -99,7 +97,7 @@ SettingsTab:CreateInput({
     end,
 })
 
--- LOGICA DELL'AIMBOT OTTIMIZZATA PER ROBLOX (LATO TELECAMERA)
+-- LOGICA REVISIONATA E FORZATA
 local Camera = workspace.CurrentCamera
 local LocalPlayer = game.Players.LocalPlayer
 
@@ -108,23 +106,22 @@ local function getClosestPlayer()
     local closestDistance = math.huge
 
     for _, v in pairs(game.Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-            -- Controllo Whitelist
-            if not table.find(State.Whitelist, v.Name:lower()) then
-                local rootPart = v.Character.HumanoidRootPart
-                
-                -- Converte la posizione 3D del bersaglio nello schermo 2D
-                local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
+            -- Controllo che il pezzo da mirare esista (usiamo Head per l'aimbot o HumanoidRootPart)
+            local targetPart = v.Character:FindFirstChild("Head") or v.Character:FindFirstChild("HumanoidRootPart")
+            
+            if targetPart and not table.find(State.Whitelist, v.Name:lower()) then
+                -- Calcola posizione sullo schermo
+                local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                 
                 if onScreen then
-                    -- Calcola la distanza dal centro dello schermo (puntamento reale)
                     local mousePos = game:GetService("UserInputService"):GetMouseLocation()
                     local distance2D = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
                     
-                    -- Verifica se il bersaglio rientra nel FOV grafico impostato
+                    -- Se è dentro il cerchio del FOV ed è il più vicino
                     if distance2D < State.FOV and distance2D < closestDistance then
                         closestDistance = distance2D
-                        target = rootPart
+                        target = targetPart
                     end
                 end
             end
@@ -133,24 +130,22 @@ local function getClosestPlayer()
     return target
 end
 
--- LOOP DI RENDERING (Heartbeat per massima reattività senza lag)
-game:GetService("RunService").Heartbeat:Connect(function()
-    -- Se l'aimbot è attivo, e passa i controlli mobile impostati dall'utente
+-- LOOP DI COERCITIZIONE DELLA TELECAMERA (RenderStepped forza lo spostamento prima del disegno del frame)
+game:GetService("RunService").RenderStepped:Connect(function()
     if State.Aimbot then
         if not isMobile() or (isMobile() and State.AimbotMobile) then
             local targetPart = getClosestPlayer()
             if targetPart then
-                -- Sposta fluidamente la visuale (Camera) verso l'HumanoidRootPart del bersaglio
+                -- METODO FORZATO: Modifica l'asse di rotazione mantenendo la posizione attuale della camera
                 Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
             end
         end
     end
 end)
 
--- Notifica finale di caricamento completato
 Rayfield:Notify({
-    Title = "Script Caricato",
-    Content = "L'interfaccia Rayfield è pronta all'uso.",
+    Title = "Script Caricato V2",
+    Content = "Puntamenti forzati pronti alla massima precisione.",
     Duration = 5,
     Image = 4483362458,
 })
