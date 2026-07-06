@@ -1,82 +1,156 @@
--- Script Rayfield con Aimbot Mobile, FOV, Whitelist, e Antiban
+-- Caricamento della libreria Rayfield
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local aimbot = false
-local fov = 100
-local whitelist = {"Player1", "Player2"} -- Aggiungi i nomi dei giocatori che non devono essere bersagliati
-local antiban = true
-local aimbot_mobile = false
+-- Creazione della Finestra Principale
+local Window = Rayfield:CreateWindow({
+    Name = "Golf Combat & Utilities Hub",
+    LoadingTitle = "Caricamento Interfaccia...",
+    LoadingSubtitle = "by Gemini",
+    ConfigurationSaving = {
+        Enabled = false,
+        FolderName = nil,
+        FileName = "CombatConfig"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "",
+        RememberJoins = false
+    },
+    KeySystem = false
+})
 
+-- VARIABILI DI STATO
+local State = {
+    Aimbot = false,
+    FOV = 100,
+    AntiBan = true,
+    AimbotMobile = false,
+    Whitelist = {"player1", "player2"} -- Nomi inseriti in minuscolo per controlli precisi
+}
+
+-- FUNZIONE DI SERVIZIO: Rilevamento Mobile
 local function isMobile()
     return game:GetService("UserInputService"):GetKeyboardInputEnabled() == false
 end
 
-local function aimbotMain()
-    if aimbot and isMobile() and aimbot_mobile then
-        local player = game.Players.LocalPlayer
-        local mouse = player:GetMouse()
+-- CREAZIONE DELLE TAB (SCHEDE)
+local CombatTab = Window:CreateTab("⚔️ Combat", 4483362458)
+local SettingsTab = Window:CreateTab("⚙️ Impostazioni", 4483362458)
 
-        local target = nil
-        local closest = math.huge
+-- ELEMENTI NELLA SCHEDA COMBAT
+CombatTab:CreateSection("Aimbot Centrale")
 
-        for i, v in pairs(game.Players:GetPlayers()) do
-            if v ~= player and v.Name:lower() ~= "localplayer" and not table.find(whitelist, v.Name:lower()) then
-                local root = v.Character and v.Character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    local pos = root.Position
-                    local distance = (pos - player.Character.HumanoidRootPart.Position).Magnitude
-                    local angle = math.atan2(pos.Y - player.Character.HumanoidRootPart.Position.Y, pos.X - player.Character.HumanoidRootPart.Position.X)
-                    local angle_deg = math.deg(angle)
+CombatTab:CreateToggle({
+    Name = "Attiva Aimbot Generale",
+    CurrentValue = State.Aimbot,
+    Flag = "ToggleAimbot",
+    Callback = function(Value)
+        State.Aimbot = Value
+    end,
+})
 
-                    if distance < closest then
-                        closest = distance
-                        target = v
+CombatTab:CreateToggle({
+    Name = "Consenti su Mobile",
+    CurrentValue = State.AimbotMobile,
+    Flag = "ToggleMobile",
+    Callback = function(Value)
+        State.AimbotMobile = Value
+    end,
+})
+
+CombatTab:CreateSlider({
+    Name = "Raggio del FOV",
+    Min = 10,
+    Max = 300,
+    CurrentValue = State.FOV,
+    Increment = 5,
+    ValueName = "Gradi/Distanza",
+    Callback = function(Value)
+        State.FOV = Value
+    end,
+})
+
+-- ELEMENTI NELLA SCHEDA IMPOSTAZIONI
+SettingsTab:CreateSection("Sicurezza & Whitelist")
+
+SettingsTab:CreateToggle({
+    Name = "Simulazione Antiban",
+    CurrentValue = State.AntiBan,
+    Flag = "ToggleAntiban",
+    Callback = function(Value)
+        State.AntiBan = Value
+    end,
+})
+
+SettingsTab:CreateInput({
+    Name = "Aggiungi alla Whitelist",
+    PlaceholderText = "Nome Giocatore",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(Text)
+        if Text and Text ~= "" then
+            table.insert(State.Whitelist, Text:lower())
+            Rayfield:Notify({
+                Title = "Whitelist Aggiornata",
+                Content = Text .. " aggiunto alla lista alleati.",
+                Duration = 3,
+                Image = 4483362458,
+            })
+        end
+    end,
+})
+
+-- LOGICA DELL'AIMBOT OTTIMIZZATA PER ROBLOX (LATO TELECAMERA)
+local Camera = workspace.CurrentCamera
+local LocalPlayer = game.Players.LocalPlayer
+
+local function getClosestPlayer()
+    local target = nil
+    local closestDistance = math.huge
+
+    for _, v in pairs(game.Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+            -- Controllo Whitelist
+            if not table.find(State.Whitelist, v.Name:lower()) then
+                local rootPart = v.Character.HumanoidRootPart
+                
+                -- Converte la posizione 3D del bersaglio nello schermo 2D
+                local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+                
+                if onScreen then
+                    -- Calcola la distanza dal centro dello schermo (puntamento reale)
+                    local mousePos = game:GetService("UserInputService"):GetMouseLocation()
+                    local distance2D = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    
+                    -- Verifica se il bersaglio rientra nel FOV grafico impostato
+                    if distance2D < State.FOV and distance2D < closestDistance then
+                        closestDistance = distance2D
+                        target = rootPart
                     end
                 end
             end
         end
+    end
+    return target
+end
 
-        if target then
-            local root = target.Character.HumanoidRootPart
-            local pos = root.Position
-            local direction = (pos - player.Character.HumanoidRootPart.Position).Unit
-
-            local x, y = math.cos(direction.X), math.sin(direction.Y)
-            local aim = CFrame.new(player.Character.HumanoidRootPart.Position, player.Character.HumanoidRootPart.Position + Vector3.new(x * 100, y * 100, 0))
-
-            local angle = math.atan2(direction.Y, direction.X)
-            local angle_deg = math.deg(angle)
-
-            if math.abs(angle_deg) < fov then
-                mouse.MoveMouseTo(aim.p)
-                mouse:Button1Down()
-                wait(0.05)
-                mouse:Button1Up()
+-- LOOP DI RENDERING (Heartbeat per massima reattività senza lag)
+game:GetService("RunService").Heartbeat:Connect(function()
+    -- Se l'aimbot è attivo, e passa i controlli mobile impostati dall'utente
+    if State.Aimbot then
+        if not isMobile() or (isMobile() and State.AimbotMobile) then
+            local targetPart = getClosestPlayer()
+            if targetPart then
+                -- Sposta fluidamente la visuale (Camera) verso l'HumanoidRootPart del bersaglio
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
             end
         end
     end
-end
-
-local function updateAimbot()
-    if antiban then
-        local player = game.Players.LocalPlayer
-        local character = player.Character or player.CharacterAdded:Wait()
-        local mouse = player:GetMouse()
-
-        local aimbotButton = Instance.new("TextButton")
-        aimbotButton.Text = "Aimbot Mobile"
-        aimbotButton.Size = UDim2.new(0.2, 0, 0.1, 0)
-        aimbotButton.Position = UDim2.new(0.75, 0, 0.85, 0)
-        aimbotButton.Parent = game:GetService("CoreGui").PlayerGui.ScreenGui
-
-        aimbotButton.MouseButton1Click:Connect(function()
-            aimbot_mobile = not aimbot_mobile
-            aimbotButton.Text = aimbot_mobile and "Aimbot Mobile ON" or "Aimbot Mobile OFF"
-        end)
-    end
-end
-
-game:GetService("RunService").Heartbeat:Connect(function()
-    aimbotMain()
 end)
 
-updateAimbot()
+-- Notifica finale di caricamento completato
+Rayfield:Notify({
+    Title = "Script Caricato",
+    Content = "L'interfaccia Rayfield è pronta all'uso.",
+    Duration = 5,
+    Image = 4483362458,
+})
