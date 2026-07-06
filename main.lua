@@ -3,7 +3,7 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- Creazione della Finestra Principale
 local Window = Rayfield:CreateWindow({
-    Name = "Dalakar-Cheat",
+    Name = "Dalakar-cheat",
     LoadingTitle = "Inizializzazione Moduli...",
     LoadingSubtitle = "by Dalakar",
     ConfigurationSaving = { Enabled = false },
